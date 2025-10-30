@@ -7,3 +7,5 @@
 __pycache__/
 .ipynb_checkpoints/
 .env
+.DS_Store
+data/.DS_Store
