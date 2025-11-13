@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Climbing Route Identifier</title>
+    <style>
+        body {
+            background-color: white;
+            font-family: Arial, sans-serif;
+            color: #000;
+            margin: 0;
+            padding: 0 20px;
+        }
+        h1, h2 {
+            text-align: center;
+        }
+        .section {
+            margin: 30px 0;
+        }
+        .file-upload, .controls, .image-output, .exports {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .label {
+            display: block;
+            margin: 10px 0 5px;
+        }
+        input[type="range"],
+        input[type="file"],
+        select,
+        button {
+            width: 100%;
+            padding: 6px;
+            margin-bottom: 15px;
+        }
+        img {
+            max-width: 100%;
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Climbing Route Identifier</h1>
+
+    <div class="section file-upload">
+        <h2>Upload Image</h2>
+        <input type="file" accept="image/png, image/jpeg" />
+    </div>
+
+    <div class="section controls">
+        <h2>Preprocessing</h2>
+        <label class="label">Bilateral Filter Diameter</label>
+        <input type="range" min="3" max="15" step="2" />
+
+        <label class="label">Color Influence</label>
+        <input type="range" min="20" max="150" />
+
+        <label class="label">Distance Influence</label>
+        <input type="range" min="20" max="150" />
+
+        <label class="label">CLAHE Clip Limit</label>
+        <input type="range" min="1" max="5" step="0.1" />
+    </div>
+
+    <div class="section controls">
+        <h2>Color Thresholds (HSV)</h2>
+        <label class="label">Hue Min/Max</label>
+        <input type="range" min="0" max="179" />
+        <input type="range" min="0" max="179" />
+
+        <label class="label">Saturation Min/Max</label>
+        <input type="range" min="0" max="255" />
+        <input type="range" min="0" max="255" />
+
+        <label class="label">Value Min/Max</label>
+        <input type="range" min="0" max="255" />
+        <input type="range" min="0" max="255" />
+    </div>
+
+    <div class="section image-output">
+        <h2>Results</h2>
+        <img src="#" alt="Processed Climbing Image" />
+    </div>
+
+    <div class="section exports">
+        <h2>Export</h2>
+        <button>Download PNG</button>
+        <button>Download CSV</button>
+        <button>Download Threshold JSON</button>
+    </div>
+</body>
+</html>

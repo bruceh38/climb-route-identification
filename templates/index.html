@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Climbing Route Identifier</title>
+    <link rel="stylesheet" href="static/styles.css">
+</head>
+<body>
+    <h1>Climbing Route Detector</h1>
+
+    <form action="/" method="POST" enctype="multipart/form-data">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <input type="file" name="image" id="fileInput" required>
+            <label for="fileInput" class="button">Choose image</label><br><br>
+        </div>
+
+        <!-- Preview size slider -->
+        <div style="text-align: center; margin-bottom: 20px;">
+            <label for="imgSize">Preview image size</label><br>
+            <input type="range" id="imgSize" min="100" max="800" value="400">
+            <span id="imgSizeValue">400 px</span>
+        </div>
+
+        <h2>Live Preview</h2>
+        <div class="preview-options">
+            <div class="preview-panel">
+                <img id="preview" src="" width="400" style="display: none;"><br>
+                <p id="status"></p>
+            </div>
+    
+            <div class="options">
+                <!-- Hue -->
+                <label>
+                    Hue Range
+                    (<span id="h_summary">0 – 179</span>)
+                </label><br>
+                <input type="range" name="h_min" id="h_min" min="0" max="179" value="0" data-display="h_min_val">
+                <span id="h_min_val">0</span><br>
+                <input type="range" name="h_max" id="h_max" min="0" max="179" value="179" data-display="h_max_val">
+                <span id="h_max_val">179</span><br><br>
+            
+                <!-- Saturation -->
+                <label>
+                    Saturation Range
+                    (<span id="s_summary">40 – 255</span>)
+                </label><br>
+                <input type="range" name="s_min" id="s_min" min="0" max="255" value="40" data-display="s_min_val">
+                <span id="s_min_val">40</span><br>
+                <input type="range" name="s_max" id="s_max" min="0" max="255" value="255" data-display="s_max_val">
+                <span id="s_max_val">255</span><br><br>
+            
+                <!-- Value / Brightness -->
+                <label>
+                    Value (Brightness) Range
+                    (<span id="v_summary">60 – 255</span>)
+                </label><br>
+                <input type="range" name="v_min" id="v_min" min="0" max="255" value="60" data-display="v_min_val">
+                <span id="v_min_val">60</span><br>
+                <input type="range" name="v_max" id="v_max" min="0" max="255" value="255" data-display="v_max_val">
+                <span id="v_max_val">255</span><br><br>
+            
+                <!-- Morphology kernels -->
+                <label>
+                    Morphology Kernel Sizes
+                    (<span id="k_summary">open 3, close 7</span>)
+                </label><br>
+                Open:
+                <input type="range" name="open_k" id="open_k" min="1" max="15" value="3" data-display="open_k_val">
+                <span id="open_k_val">3</span><br>
+                Close:
+                <input type="range" name="close_k" id="close_k" min="1" max="21" value="7" data-display="close_k_val">
+                <span id="close_k_val">7</span><br><br>
+            
+                <!-- Min area -->
+                <label>
+                    Min Area
+                    (<span id="area_summary">150 px²</span>)
+                </label><br>
+                <input type="range" name="area_min" id="area_min" min="0" max="5000" value="150" step="10" data-display="area_min_val">
+                <span id="area_min_val">150</span><br><br>
+            
+                <!-- CLAHE toggle -->
+                <label>
+                    Use CLAHE?
+                    (<span id="clahe_summary">on</span>)
+                </label>
+                <input type="checkbox" name="clahe" id="clahe" checked><br><br>
+            
+                <div class="submit-row">
+                    <button type="submit" class="button">Generate</button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {% if result_image %}
+        <h2>Result</h2>
+
+        <div class="result">
+
+            
+
+            
+            <img id="resultImage" class="resultImage" src="{{ url_for('processed_file', filename=result_image) }}" width="400"><br>
+            
+            <!-- Result size slider -->
+            <div class="sizeSlider">
+                <label for="resultSize">Result image size</label><br>
+                <input type="range" id="resultSize" min="100" max="800" value="400">
+                <span id="resultSizeValue">400 px</span>
+            </div>
+        </div>
+        <p>{{ num_detected }} climbing holds detected.</p>
+    {% endif %}
+
+    <script>
+        const form = document.querySelector("form");
+        const previewImg = document.getElementById("preview");
+        const statusText = document.getElementById("status");
+        const sizeSlider = document.getElementById("imgSize");
+        const sizeValue = document.getElementById("imgSizeValue");
+        const resultImg = document.getElementById("resultImage");
+        const resultSizeSlider = document.getElementById("resultSize");
+        const resultSizeValue = document.getElementById("resultSizeValue");
+
+        function applyPreviewSize(width) {
+            if (previewImg) {
+                previewImg.style.width = width + "px";
+            }
+        }
+
+        function applyResultSize(width) {
+            if (resultImg) {
+                resultImg.style.width = width + "px";
+            }
+        }
+
+        // Initialize preview size on load
+        if (sizeSlider) {
+            applyPreviewSize(sizeSlider.value);
+            sizeSlider.addEventListener("input", () => {
+                const w = sizeSlider.value;
+                sizeValue.textContent = w + " px";
+                applyPreviewSize(w);
+            });
+        }
+
+        // Initialize result size on load (only if result is present)
+        if (resultSizeSlider) {
+            applyResultSize(resultSizeSlider.value);
+            resultSizeValue.textContent = resultSizeSlider.value + " px";
+
+            resultSizeSlider.addEventListener("input", () => {
+                const w = resultSizeSlider.value;
+                resultSizeValue.textContent = w + " px";
+                applyResultSize(w);
+            });
+        }
+
+        // Attach event listeners to all form inputs *that have a name* (exclude size slider)
+        const inputs = form.querySelectorAll("input[name]");
+        inputs.forEach(input => {
+            input.addEventListener("input", () => {
+                generatePreview();
+            });
+        });
+
+        // Per-slider numeric displays and summaries
+        const rangeInputsWithDisplay = document.querySelectorAll('input[type="range"][data-display]');
+        rangeInputsWithDisplay.forEach(slider => {
+            const span = document.getElementById(slider.dataset.display);
+            const updateDisplay = () => {
+                if (span) span.textContent = slider.value;
+                updateSummaries();
+            };
+            slider.addEventListener("input", updateDisplay);
+            updateDisplay(); // initial
+        });
+
+        const claheCheckbox = document.getElementById("clahe");
+        if (claheCheckbox) {
+            claheCheckbox.addEventListener("change", () => {
+                updateSummaries();
+                generatePreview();
+            });
+        }
+
+        function updateSummaries() {
+            const hMin = document.getElementById("h_min").value;
+            const hMax = document.getElementById("h_max").value;
+            const sMin = document.getElementById("s_min").value;
+            const sMax = document.getElementById("s_max").value;
+            const vMin = document.getElementById("v_min").value;
+            const vMax = document.getElementById("v_max").value;
+            const openK = document.getElementById("open_k").value;
+            const closeK = document.getElementById("close_k").value;
+            const areaMin = document.getElementById("area_min").value;
+            const claheOn = document.getElementById("clahe").checked;
+
+            document.getElementById("h_summary").textContent = `${hMin} – ${hMax}`;
+            document.getElementById("s_summary").textContent = `${sMin} – ${sMax}`;
+            document.getElementById("v_summary").textContent = `${vMin} – ${vMax}`;
+            document.getElementById("k_summary").textContent = `open ${openK}, close ${closeK}`;
+            document.getElementById("area_summary").textContent = `${areaMin} px²`;
+            document.getElementById("clahe_summary").textContent = claheOn ? "on" : "off";
+        }
+
+        // Initial summaries on load
+        updateSummaries();
+
+        function generatePreview() {
+            const formData = new FormData(form);
+
+            fetch("/preview", {
+                method: "POST",
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.preview_url) {
+                    previewImg.src = data.preview_url + "?t=" + new Date().getTime();  // prevent caching
+                    previewImg.style.display = "block";
+                    statusText.innerText = `${data.num_detected} holds detected.`;
+                    // Keep preview width in sync with slider
+                    if (sizeSlider) {
+                        applyPreviewSize(sizeSlider.value);
+                    }
+                } else {
+                    statusText.innerText = "Error generating preview.";
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                statusText.innerText = "Preview failed.";
+            });
+        }
+    </script>
+</body>
+</html>

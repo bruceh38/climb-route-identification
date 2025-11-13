@@ -1,0 +1,109 @@
+body {
+    background-color: #343a49;
+    margin: 2rem;
+    color: white;
+    font-size: large;
+}
+
+h1 {
+    width: 70%;
+    border: solid tomato;
+    padding: 50px;
+    margin: auto;
+    text-align: center;
+    font-family: "Lucida Console", "Courier New", monospace;
+}
+
+.result {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    justify-content: center;
+    margin-bottom: 20px;
+    width: min(900px, 100%);
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.resultImage {
+    flex: 0 1 auto;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    max-width: calc(100% - 340px);
+}
+
+
+
+.sizeSlider {
+    border: solid tomato;
+    flex: 0 0 260px;
+    width: 300px;
+    font-size: 14px;
+    text-align: center;
+    font-family: "Lucida Console", "Courier New", monospace;
+    
+}
+
+.preview-options {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.preview-panel {
+    flex: 0 1 auto;
+}
+
+.options {
+    border: solid tomato;
+    flex: 0 0 260px;
+    width: 300px;
+    font-size: 14px;
+    text-align: center;
+    font-family: "Lucida Console", "Courier New", monospace;
+}
+
+/* Stack preview/options on small screens */
+@media (max-width: 900px) {
+    .preview-options {
+        flex-direction: column;
+        align-items: center;
+    }
+    .result {
+        flex-direction: column;
+        align-items: center;
+    }
+}
+
+.submit-row {
+    text-align: center;
+    margin-top: 20px;
+}
+
+/* Unified button style for BOTH file label and submit button */
+.button {
+    background-color: tomato;
+    border: 2px solid white;
+    border-radius: 8px;
+    color: white;
+    padding: 15px 32px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    cursor: pointer;
+    margin-top: 20px;
+    font-family: "Lucida Console", "Courier New", monospace;
+}
+
+.button:hover {
+    background-color: #343a49;
+}
+
+/* Hide the native file input */
+#fileInput {
+    display: none;
+}
