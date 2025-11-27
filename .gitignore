@@ -1,11 +1,44 @@
-# .gitignore
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging / build
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Logs / coverage / testing
+*.log
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Environment / secrets
+.env
+.env.*
+*.env
+
+# macOS
+.DS_Store
+data/.DS_Store
+
+# Media artifacts (keep datasets out of version control)
 *.jpg
 *.png
 *.mp4
 *.pdf
 *.zip
-__pycache__/
-.ipynb_checkpoints/
-.env
-.DS_Store
-data/.DS_Store
+uploads/
+processed/
+data/exports/
