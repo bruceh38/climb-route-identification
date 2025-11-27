@@ -93,24 +93,43 @@
     </form>
 
     {% if result_image %}
-        <h2>Result</h2>
+    <h2>Result</h2>
 
-        <div class="result">
-
-            
-
-            
-            <img id="resultImage" class="resultImage" src="{{ url_for('processed_file', filename=result_image) }}" width="400"><br>
-            
-            <!-- Result size slider -->
-            <div class="sizeSlider">
-                <label for="resultSize">Result image size</label><br>
-                <input type="range" id="resultSize" min="100" max="800" value="400">
-                <span id="resultSizeValue">400 px</span>
-            </div>
+    <div class="result">
+        <!-- NEW: wrapper for image + canvas -->
+        <div class="result-img-wrapper">
+            <img id="resultImage" class="resultImage"
+                 src="{{ url_for('processed_file', filename=result_image) }}" width="400">
+            <canvas id="holdCanvas"></canvas>
         </div>
-        <p>{{ num_detected }} climbing holds detected.</p>
-    {% endif %}
+        
+        <!-- Result size slider (unchanged) -->
+        <div class="sizeSlider">
+            <label for="resultSize">Result image size</label><br>
+            <input type="range" id="resultSize" min="100" max="800" value="400">
+            <span id="resultSizeValue">400 px</span>
+        </div>
+    </div>
+
+    <div class="submit-row">
+        <button type="button" id="monoButton" class="button">
+            Dim selected holds
+        </button>
+        <button type="button" id="exportButton" class="button">
+            Export Image
+        </button>
+    </div>
+
+    <p>{{ num_detected }} climbing holds detected.</p>
+
+    <!-- NEW: show selected count -->
+    <p>Selected holds: <span id="selectedCount">0</span></p>
+
+    <!-- NEW: embed holds data JSON -->
+    <script id="holdData" type="application/json">
+        {{ components_json|safe }}
+    </script>
+{% endif %}
 
     <script>
         const form = document.querySelector("form");
@@ -231,6 +250,234 @@
             .catch(err => {
                 console.error(err);
                 statusText.innerText = "Preview failed.";
+            });
+        }
+
+        // -------- HOLD SELECTION CANVAS LOGIC (NEW) --------
+        const holdDataScript = document.getElementById("holdData");
+        let holds = [];
+        let selected = new Set();
+        let ctx = null;
+
+        function drawHolds() {
+            const canvas = document.getElementById("holdCanvas");
+            const img = document.getElementById("resultImage");
+            if (!canvas || !img || !ctx || !holds.length) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const scaleX = img.clientWidth / img.naturalWidth;
+            const scaleY = img.clientHeight / img.naturalHeight;
+            const scale = (scaleX + scaleY) / 2;
+
+            holds.forEach(h => {
+                const x = h.cx * scaleX;
+                const y = h.cy * scaleY;
+                const radius = 8 * scale;
+
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.lineWidth = 2;
+
+                if (selected.has(h.id)) {
+                    ctx.fillStyle = "rgba(255, 0, 0, 0.3)"; // red translucent fill
+                    ctx.strokeStyle = "red";
+                    ctx.fill();
+                    ctx.stroke();
+                } else {
+                    ctx.strokeStyle = "lime";               // green outline
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function initHoldCanvas() {
+            if (!holdDataScript) return;
+            const canvas = document.getElementById("holdCanvas");
+            const img = document.getElementById("resultImage");
+            const selectedCountEl = document.getElementById("selectedCount");
+            if (!canvas || !img || !selectedCountEl) return;
+
+            try {
+                holds = JSON.parse(holdDataScript.textContent || "[]");
+                holds = holds.map((h, i) => ({ ...h, id: i }));
+            } catch (e) {
+                holds = [];
+            }
+
+            ctx = canvas.getContext("2d");
+
+            function resizeCanvas() {
+                canvas.width = img.clientWidth;
+                canvas.height = img.clientHeight;
+                drawHolds();
+            }
+            const resultSizeSlider = document.getElementById("resultSize");
+            if (resultSizeSlider) {
+                resultSizeSlider.addEventListener("input", () => {
+                    resizeCanvas();
+                });
+            }
+            function updateSelectedCount() {
+                selectedCountEl.textContent = selected.size;
+            }
+
+            canvas.addEventListener("click", (evt) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = evt.clientX - rect.left;
+                const y = evt.clientY - rect.top;
+
+                const imgW = img.clientWidth;
+                const imgH = img.clientHeight;
+                const scaleX = imgW / img.naturalWidth;
+                const scaleY = imgH / img.naturalHeight;
+                const scale = (scaleX + scaleY) / 2;
+
+                let hitId = null;
+                holds.forEach(h => {
+                    const hx = h.cx * scaleX;
+                    const hy = h.cy * scaleY;
+                    const radius = 10 * scale;
+                    const dx = x - hx;
+                    const dy = y - hy;
+                    if (dx * dx + dy * dy <= radius * radius) {
+                        hitId = h.id;
+                    }
+                });
+
+                if (hitId !== null) {
+                    if (selected.has(hitId)) {
+                        selected.delete(hitId);
+                    } else {
+                        selected.add(hitId);
+                    }
+                    updateSelectedCount();
+                    drawHolds();
+                }
+            });
+
+            img.addEventListener("load", () => {
+                resizeCanvas();
+                updateSelectedCount();
+            });
+
+            if (img.complete) {
+                resizeCanvas();
+                updateSelectedCount();
+            }
+
+            window.addEventListener("resize", resizeCanvas);
+        }
+
+        // Run once on page load (only does something when result_image exists)
+        initHoldCanvas();
+
+
+        const monoButton = document.getElementById("monoButton");
+        const holdCanvas = document.getElementById("holdCanvas");
+
+        if (monoButton && holdCanvas && resultImg) {
+            monoButton.addEventListener("click", () => {
+                if (!holds.length) return;
+
+                // If nothing is selected, do nothing (or show a hint)
+                if (selected.size === 0) {
+                    alert("Click on holds to select them before dimming.");
+                    return;
+                }
+
+                const naturalW = resultImg.naturalWidth;
+                const naturalH = resultImg.naturalHeight;
+                if (!naturalW || !naturalH) return;
+
+                const baseCanvas = document.createElement("canvas");
+                baseCanvas.width = naturalW;
+                baseCanvas.height = naturalH;
+                const monoCtx = baseCanvas.getContext("2d");
+
+                // Draw current colored image at full res
+                monoCtx.drawImage(resultImg, 0, 0, naturalW, naturalH);
+
+                const imageData = monoCtx.getImageData(0, 0, naturalW, naturalH);
+                const data = imageData.data;
+
+                // Precompute selected holds and their radii in ORIGINAL coords
+                const coloredHolds = holds
+                    .filter(h => !selected.has(h.id))
+                    .map(h => {
+                        // Estimate radius from area (area ~= π r²)
+                        const rawR = Math.sqrt((h.area || 100) / Math.PI);
+                        // give it a little buffer so we actually see color
+                        const radius = Math.max(6, rawR * 1.1);
+                        return {
+                            cx: h.cx,
+                            cy: h.cy,
+                            r: radius,
+                            r2: radius * radius
+                        };
+                    });
+
+                if (coloredHolds.length === 0) {
+                    // Safety net: if somehow no selected holds made it through
+                    alert("No valid selected holds found.");
+                    return;
+                }
+
+                // For each pixel: if inside ANY selected circle → keep color
+                // otherwise convert to grayscale
+                for (let y = 0; y < naturalH; y++) {
+                    for (let x = 0; x < naturalW; x++) {
+                        const idx = (y * naturalW + x) * 4;
+
+                        // Check membership in any selected hold
+                        let insideColored = false;
+                        for (let i = 0; i < coloredHolds.length; i++) {
+                            const h = coloredHolds[i];
+                            const dx = x - h.cx;
+                            const dy = y - h.cy;
+                            if (dx * dx + dy * dy <= h.r2) {
+                                insideColored = true;
+                                break;
+                            }
+                        }
+
+                        if (!insideColored) {
+                            const r = data[idx];
+                            const g = data[idx + 1];
+                            const b = data[idx + 2];
+                            const a = data[idx + 3];
+                            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                            data[idx]     = lum;
+                            data[idx + 1] = lum;
+                            data[idx + 2] = lum;
+                            data[idx + 3] = a;
+                        }
+                        // else: leave RGB as-is (colored)
+                    }
+                }
+
+                // Put the adjusted pixels back and update the <img>
+                monoCtx.putImageData(imageData, 0, 0);
+                resultImg.src = baseCanvas.toDataURL("image/png");
+            });
+        }
+
+        const exportButton = document.getElementById("exportButton");
+
+        if (exportButton && resultImg) {
+            exportButton.addEventListener("click", () => {
+                if (!resultImg.src) {
+                    alert("No image to export yet.");
+                    return;
+                }
+
+                // Create a temporary link and trigger download
+                const link = document.createElement("a");
+                link.href = resultImg.src;
+                link.download = "climb_route.png";  // file name
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
             });
         }
     </script>

@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, send_file, jsonify
 import os
 import cv2
 import numpy as np
+import json
 
 from preprocess import preprocess_pipeline
 from masking import build_mask_hsv, morphology_cleanup, remove_small_components
@@ -138,7 +139,7 @@ def index():
         mask_clean = morphology_cleanup(raw_mask, 0, open_k, close_k, True, True)
         final_mask = remove_small_components(mask_clean, area_min)
 
-        # ---- NEW: grayscale background, color only inside mask ----
+                # ---- grayscale background, color only inside mask ----
         gray = cv2.cvtColor(rgb_proc, cv2.COLOR_RGB2GRAY)
         gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
         mask_3 = (final_mask > 0)[..., None]
@@ -148,13 +149,40 @@ def index():
         output_path = os.path.join(PROCESSED_FOLDER, "result.png")
         cv2.imwrite(output_path, cv2.cvtColor(result, cv2.COLOR_RGB2BGR))
 
-        num_detected = len(find_components(final_mask, area_min))
+        # ---- NEW: compute hold centers for selection canvas ----
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+            final_mask, connectivity=8
+        )
+        holds = []
+        for label_id in range(1, num_labels):  # skip background 0
+            area = int(stats[label_id, cv2.CC_STAT_AREA])
+            cx, cy = centroids[label_id]
+            holds.append(
+                {
+                    "id": label_id - 1,
+                    "cx": float(cx),
+                    "cy": float(cy),
+                    "area": area,
+                }
+            )
+
+        num_detected = len(holds)
+        components_json = json.dumps(holds)
 
         return render_template(
-            "index.html", result_image="result.png", num_detected=num_detected
+            "index.html",
+            result_image="result.png",
+            num_detected=num_detected,
+            components_json=components_json,   # NEW
         )
 
-    return render_template("index.html", result_image=None)
+    # return render_template("index.html", result_image=None)
+    return render_template(
+        "index.html",
+        result_image=None,
+        num_detected=0,
+        components_json="[]",   # NEW
+    )
 
 
 @app.route("/processed/<filename>")

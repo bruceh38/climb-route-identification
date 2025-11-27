@@ -14,24 +14,44 @@ h1 {
     font-family: "Lucida Console", "Courier New", monospace;
 }
 
+.result-img-wrapper {
+    position: relative;
+    display: inline-block;
+    flex: 1 1 auto;
+    max-width: 100%;
+}
+
+.result-img-wrapper .resultImage {
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+
+#holdCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    /* Let JS control width/height via .width/.height */
+    pointer-events: auto; /* so clicks still work */
+}
+
 .result {
     display: flex;
     align-items: flex-start;
     gap: 24px;
     justify-content: center;
     margin-bottom: 20px;
-    width: min(900px, 100%);
     margin-left: auto;
     margin-right: auto;
 }
 
-.resultImage {
+/* .resultImage {
     flex: 0 1 auto;
     height: auto;
     display: block;
     margin: 0 auto;
     max-width: calc(100% - 340px);
-}
+} */
 
 
 
@@ -103,7 +123,24 @@ h1 {
     background-color: #343a49;
 }
 
+.submit-row .button {
+    margin: 20px 10px 0 10px;
+}
+
 /* Hide the native file input */
 #fileInput {
     display: none;
 }
+
+/* NEW: result image + canvas overlay */
+/* .result-img-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+#holdCanvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: auto;
+} */
