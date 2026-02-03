@@ -18,7 +18,8 @@ A Streamlit app that isolates climbing holds in a wall photo using HSV masking a
 ## Deploy to Streamlit Community Cloud
 1. Push this repo to GitHub.
 2. In share.streamlit.io, create an app pointing to `streamlit_app.py` on `main`.
-3. (Optional) Set Python version to 3.10/3.11; leave secrets empty for now.
+3. Ensure Python 3.11 is used (this repo ships `runtime.txt` with `python-3.11.0`).
+4. Leave secrets empty for now.
 
 ## Notes
 - Dependencies are pinned for reproducible cloud builds.
