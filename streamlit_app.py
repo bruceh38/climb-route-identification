@@ -1,13 +1,14 @@
 import streamlit as st
 import cv2
 import numpy as np
-from PIL import Image
 import os
+import io
+import csv
+import json
 
 from preprocess import preprocess_pipeline
 from masking import build_mask_hsv, morphology_cleanup, remove_small_components
 from components_utils import find_components
-from export_utils import export_transparent_png, export_components_csv, write_thresholds_json
 from color_ops import kmeans_hsv, bounds_from_center
 
 st.set_page_config(page_title="Climbing Route Detection", layout="wide")
@@ -103,17 +104,45 @@ if uploaded_file:
     st.subheader("🗕️ Export Options")
     colx, coly, colz = st.columns(3)
     export_base = os.path.splitext(uploaded_file.name)[0]
-    export_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/exports"))
 
-    if colx.button("Download Transparent PNG"):
-        out_png = os.path.join(export_dir, f"{export_base}_holds.png")
-        export_transparent_png(proc_rgb, final_mask, out_png)
-        st.success(f"Saved PNG: {out_png}")
-    if coly.button("Download Components CSV"):
-        out_csv = os.path.join(export_dir, f"{export_base}_components.csv")
-        export_components_csv(components, out_csv)
-        st.success(f"Saved CSV: {out_csv}")
-    if colz.button("Download HSV Thresholds JSON"):
-        out_json = os.path.join(export_dir, f"{export_base}_thresholds.json")
-        write_thresholds_json(lower, upper, out_json, meta={"num_holds": len(components)})
-        st.success(f"Saved JSON: {out_json}")
+    # Build in-memory exports (Streamlit Cloud friendly)
+    rgba = np.dstack([proc_rgb, (final_mask > 0).astype(np.uint8) * 255])
+    _, png_buf = cv2.imencode(".png", cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGRA))
+    png_bytes = png_buf.tobytes()
+
+    csv_buf = io.StringIO()
+    writer = csv.writer(csv_buf)
+    writer.writerow(["area", "centroid_x", "centroid_y", "x", "y", "w", "h", "circularity"])
+    for c in components:
+        cx, cy = c["centroid"]
+        x, y, w, h = c["bbox"]
+        writer.writerow([c["area"], cx, cy, x, y, w, h, c["circularity"]])
+    csv_bytes = csv_buf.getvalue().encode("utf-8")
+
+    thresholds_json = json.dumps(
+        {
+            "lower_hsv": lower.tolist() if lower is not None else None,
+            "upper_hsv": upper.tolist() if upper is not None else None,
+            "num_holds": len(components),
+        },
+        indent=2,
+    ).encode("utf-8")
+
+    colx.download_button(
+        "Download Transparent PNG",
+        data=png_bytes,
+        file_name=f"{export_base}_holds.png",
+        mime="image/png",
+    )
+    coly.download_button(
+        "Download Components CSV",
+        data=csv_bytes,
+        file_name=f"{export_base}_components.csv",
+        mime="text/csv",
+    )
+    colz.download_button(
+        "Download HSV Thresholds JSON",
+        data=thresholds_json,
+        file_name=f"{export_base}_thresholds.json",
+        mime="application/json",
+    )
