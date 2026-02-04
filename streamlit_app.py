@@ -14,94 +14,188 @@ from color_ops import kmeans_hsv, bounds_from_center
 st.set_page_config(page_title="Climbing Route Detection", layout="wide")
 st.title("Climbing Route Identifier")
 
-uploaded_file = st.file_uploader("Upload a climbing wall image", type=["jpg", "jpeg", "png"])
+# ---- sensible defaults stored in session_state ----
+defaults = {
+    "h_min": 0,
+    "h_max": 179,
+    "s_min": 40,
+    "s_max": 255,
+    "v_min": 60,
+    "v_max": 255,
+    "area_min": 150,
+    "use_clahe": True,
+    "do_open": True,
+    "do_close": True,
+    "open_k": 3,
+    "close_k": 7,
+}
+for k, v in defaults.items():
+    st.session_state.setdefault(k, v)
+
+presets = [
+    {
+        "name": "Bright holds",
+        "hint": "High contrast colors",
+        "h_min": 0,
+        "h_max": 179,
+        "s_min": 40,
+        "v_min": 70,
+        "area_min": 140,
+        "use_clahe": True,
+    },
+    {
+        "name": "Pastel holds",
+        "hint": "Softer colors",
+        "h_min": 0,
+        "h_max": 179,
+        "s_min": 20,
+        "v_min": 70,
+        "area_min": 160,
+        "use_clahe": True,
+    },
+    {
+        "name": "Dim lighting",
+        "hint": "Low light gyms",
+        "h_min": 0,
+        "h_max": 179,
+        "s_min": 30,
+        "v_min": 40,
+        "area_min": 140,
+        "use_clahe": True,
+    },
+    {
+        "name": "Reset",
+        "hint": "Factory defaults",
+        **defaults,
+    },
+]
+
+
+def apply_preset(preset):
+    for k in ["h_min", "h_max", "s_min", "s_max", "v_min", "v_max", "area_min", "use_clahe"]:
+        if k in preset:
+            st.session_state[k] = preset[k]
+
+
+st.header("Step 1 · Upload")
+uploaded_file = st.file_uploader("Upload a climbing wall image (JPG/PNG)", type=["jpg", "jpeg", "png"])
+
 if uploaded_file:
-    img_width = st.slider("Image display width (px)", 100, 1600, 800)
+    img_width = st.slider("Preview size", 400, 1200, 800, help="Adjust on-screen preview only.")
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
     image = cv2.imdecode(file_bytes, 1)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-    st.image(image, caption="Original Image", width=img_width)
+    st.image(image, caption="Original wall", width=img_width)
 
+    st.header("Step 2 · Pick the hold color")
 
-    st.subheader("⚙️ Preprocessing Options")
-    _, _, c3 = st.columns(3)
-    with c3:
-        use_clahe = st.checkbox("Apply contrast enhancement (CLAHE)", value=True)
+    preset_cols = st.columns(len(presets))
+    for col, preset in zip(preset_cols, presets):
+        if col.button(preset["name"]):
+            apply_preset(preset)
+            st.toast(f"Applied preset: {preset['name']} ({preset['hint']})")
+    st.caption("Presets set color sensitivity and brightness tweaks automatically.")
 
-    colp1, colp2 = st.columns(2)
-    with colp1:
-        bilat_d = st.slider("Bilateral filter kernel diameter", 3, 15, 9, step=2)
-        bilat_sc = st.slider("Color influence for bilateral filter", 20, 150, 75)
-    with colp2:
-        bilat_ss = st.slider("Distance influence for bilateral filter", 20, 150, 75)
-        clahe_clip = st.slider("CLAHE clip limit (higher = more contrast)", 1.0, 5.0, 2.0)
+    h_min, h_max = st.slider(
+        "Color range (Hue)",
+        0,
+        179,
+        (st.session_state["h_min"], st.session_state["h_max"]),
+        help="Drag the handles to cover the main color of the holds.",
+    )
+    st.session_state["h_min"], st.session_state["h_max"] = h_min, h_max
 
+    area_min = st.slider(
+        "Ignore tiny spots (px²)",
+        50,
+        2000,
+        st.session_state["area_min"],
+        step=10,
+        help="Higher = fewer tiny specks kept.",
+    )
+    st.session_state["area_min"] = area_min
+
+    use_clahe = st.checkbox(
+        "Brighten dim walls",
+        value=st.session_state["use_clahe"],
+        help="Boosts contrast in darker photos.",
+    )
+    st.session_state["use_clahe"] = use_clahe
+
+    with st.expander("Advanced fine-tuning (optional)", expanded=False):
+        st.markdown("**Color detail**")
+        s_min = st.slider("Minimum color strength (Saturation)", 0, 255, st.session_state["s_min"])
+        v_min = st.slider("Minimum brightness (Value)", 0, 255, st.session_state["v_min"])
+        st.session_state["s_min"], st.session_state["v_min"] = s_min, v_min
+
+        st.markdown("**Cleanup**")
+        do_open = st.checkbox("Remove specks (opening)", value=st.session_state["do_open"])
+        open_k = st.slider("Speck removal strength", 1, 15, st.session_state["open_k"], step=2)
+        do_close = st.checkbox("Fill small gaps (closing)", value=st.session_state["do_close"])
+        close_k = st.slider("Gap filling strength", 1, 21, st.session_state["close_k"], step=2)
+        st.session_state["do_open"], st.session_state["do_close"] = do_open, do_close
+        st.session_state["open_k"], st.session_state["close_k"] = open_k, close_k
+
+        st.markdown("**Auto pick color (optional)**")
+        if st.button("Suggest a color from the image"):
+            centers, _labels, counts = kmeans_hsv(hsv_image, k=6)
+            # choose most frequent cluster
+            main_idx = int(np.argmax(counts))
+            lower_suggest, upper_suggest = bounds_from_center(centers[main_idx])
+            st.session_state["h_min"], st.session_state["h_max"] = int(lower_suggest[0]), int(upper_suggest[0])
+            st.session_state["s_min"] = int(lower_suggest[1])
+            st.session_state["v_min"] = int(lower_suggest[2])
+            st.toast("Auto-selected a color range from the image.")
+
+    # build HSV thresholds from state
+    lower = np.array(
+        [st.session_state["h_min"], st.session_state["s_min"], st.session_state["v_min"]], dtype=np.uint8
+    )
+    upper = np.array(
+        [st.session_state["h_max"], st.session_state.get("s_max", 255), st.session_state.get("v_max", 255)],
+        dtype=np.uint8,
+    )
+
+    # preprocessing
     proc_rgb, proc_hsv = preprocess_pipeline(
         image,
         use_grayworld=False,
         use_bilateral_filter=False,
-        use_clahe_v_enhancement=use_clahe,
-        bilateral_d=bilat_d,
-        bilateral_sigma_color=float(bilat_sc),
-        bilateral_sigma_space=float(bilat_ss),
-        clahe_clip_limit=float(clahe_clip),
+        use_clahe_v_enhancement=st.session_state["use_clahe"],
+        bilateral_d=9,
+        bilateral_sigma_color=75.0,
+        bilateral_sigma_space=75.0,
+        clahe_clip_limit=2.0,
         scale=1.0,
     )
 
-    st.subheader("🎨 Color Selection (HSV)")
-    method = st.radio("Color Selection Method", ["Manual", "KMeans (Suggest)"])
-    if method == "Manual":
-        col1, col2 = st.columns(2)
-        with col1:
-            h_min = st.slider("Hue minimum (e.g., red = 0)", 0, 179, 0)
-            s_min = st.slider("Saturation minimum (how pure the color is)", 0, 255, 40)
-            v_min = st.slider("Brightness minimum (darker colors lower)", 0, 255, 60)
-        with col2:
-            h_max = st.slider("Hue maximum", 0, 179, 179)
-            s_max = st.slider("Saturation maximum", 0, 255, 255)
-            v_max = st.slider("Brightness maximum", 0, 255, 255)
-        lower = np.array([h_min, s_min, v_min], dtype=np.uint8)
-        upper = np.array([h_max, s_max, v_max], dtype=np.uint8)
-    else:
-        k = st.slider("Number of dominant color suggestions (KMeans K)", 5, 8, 6)
-        centers, _labels, counts = kmeans_hsv(proc_hsv, k=k)
-        st.caption("Click a cluster to use its center ± margins")
-        cols = st.columns(min(k, 6))
-        chosen = st.session_state.get("_km_choice", 0)
-        for i in range(k):
-            center = centers[i]
-            pct = (counts[i] / max(1, counts.sum())) * 100.0
-            rgb = cv2.cvtColor(np.uint8([[center]]), cv2.COLOR_HSV2RGB)[0][0]
-            hex_color = '#%02x%02x%02x' % (int(rgb[0]), int(rgb[1]), int(rgb[2]))
-            if cols[i % len(cols)].button(f"Use C{i} ({pct:.1f}%)\n{hex_color}"):
-                st.session_state["_km_choice"] = i
-                chosen = i
-        lower, upper = bounds_from_center(centers[chosen])
-
-    st.subheader("🧼 Mask Cleanup Options")
-    _, m2, m3 = st.columns(3)
-    with m2:
-        do_open = st.checkbox("Apply morphological opening (remove noise)", value=True)
-        open_k = st.slider("Opening kernel size", 1, 15, 3, step=2)
-    with m3:
-        do_close = st.checkbox("Apply morphological closing (fill gaps)", value=True)
-        close_k = st.slider("Closing kernel size", 1, 21, 7, step=2)
-    area_min = st.slider("Minimum pixel area to keep (removes tiny spots)", 0, 5000, 150, step=10)
-
     raw_mask = build_mask_hsv(proc_hsv, lower, upper)
-    cleaned = morphology_cleanup(raw_mask, 0, open_k, close_k, do_open, do_close)
-    final_mask = remove_small_components(cleaned, area_min)
+    cleaned = morphology_cleanup(
+        raw_mask,
+        0,
+        st.session_state["open_k"],
+        st.session_state["close_k"],
+        st.session_state["do_open"],
+        st.session_state["do_close"],
+    )
+    final_mask = remove_small_components(cleaned, st.session_state["area_min"])
 
     result = cv2.bitwise_and(proc_rgb, proc_rgb, mask=final_mask)
 
-    st.subheader("🖼️ Final Result")
-    st.image(result, caption="Masked Route (preprocessed)", width=img_width)
+    st.header("Step 3 · Check result")
+    st.image(result, caption="Masked route", width=img_width)
 
-    components = find_components(final_mask, area_min=area_min)
-    st.info(f"Detected holds: {len(components)}  |  Total area: {int(sum(c['area'] for c in components))} px²")
+    components = find_components(final_mask, area_min=st.session_state["area_min"])
+    coverage = np.count_nonzero(final_mask) / float(final_mask.size)
+    if coverage < 0.002:
+        st.warning(f"Detected {len(components)} holds. Mask is very small—try a wider color range or a preset.")
+    elif coverage < 0.02:
+        st.info(f"Detected {len(components)} holds. Looks okay; widen color range if holds are missing.")
+    else:
+        st.success(f"Detected {len(components)} holds. Coverage looks good.")
 
-    st.subheader("🗕️ Export Options")
+    st.header("Step 4 · Download")
     colx, coly, colz = st.columns(3)
     export_base = os.path.splitext(uploaded_file.name)[0]
 
@@ -129,20 +223,22 @@ if uploaded_file:
     ).encode("utf-8")
 
     colx.download_button(
-        "Download Transparent PNG",
+        "Download photo with holds",
         data=png_bytes,
         file_name=f"{export_base}_holds.png",
         mime="image/png",
     )
     coly.download_button(
-        "Download Components CSV",
+        "Download hold list (CSV)",
         data=csv_bytes,
         file_name=f"{export_base}_components.csv",
         mime="text/csv",
     )
     colz.download_button(
-        "Download HSV Thresholds JSON",
+        "Download color settings (JSON)",
         data=thresholds_json,
         file_name=f"{export_base}_thresholds.json",
         mime="application/json",
     )
+else:
+    st.info("Upload a wall photo to begin.")
